@@ -17,7 +17,6 @@ const firebaseConfig = {
   messagingSenderId: "306688675540",
   appId: "1:306688675540:web:616b71b69581631aa07541"
 };
-
 const app = initializeApp(firebaseConfig);
 const db  = getFirestore(app);
 
@@ -38,37 +37,26 @@ html,body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(-
 
 .page{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px 16px 40px}
 
-/* 세션 배지 */
-.session-badge{
-  width:100%;max-width:480px;
-  background:#1e4030;color:#fff;
-  border-radius:10px;padding:8px 16px;
-  margin-bottom:10px;
-  display:flex;align-items:center;justify-content:space-between;
-  font-size:.78rem;
-}
+.session-badge{width:100%;max-width:480px;background:#1e4030;color:#fff;border-radius:10px;padding:8px 16px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;font-size:.78rem}
 .session-code{font-weight:700;letter-spacing:.12em;font-family:monospace;font-size:1rem;background:rgba(255,255,255,.15);padding:2px 10px;border-radius:5px}
 
-/* 수업 주제 배너 */
 .topic-banner{width:100%;max-width:480px;background:var(--accent);color:#fff;border-radius:14px;padding:14px 18px;margin-bottom:16px;text-align:center}
 .topic-label{font-size:.7rem;opacity:.72;margin-bottom:3px;letter-spacing:.05em}
 .topic-text{font-size:1.05rem;font-weight:700;line-height:1.4}
 
-/* 수동 세션 입력 (QR 없이 직접 올 경우) */
 .manual-session{width:100%;max-width:480px;background:var(--card);border-radius:14px;padding:18px;margin-bottom:14px;box-shadow:0 2px 12px rgba(0,0,0,.07)}
-.manual-session h3{font-size:.88rem;font-weight:700;margin-bottom:10px;color:var(--text)}
+.manual-session h3{font-size:.88rem;font-weight:700;margin-bottom:10px}
 .manual-session input{width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;font-size:.95rem;outline:none;transition:border-color .2s;margin-bottom:8px}
 .manual-session input:focus{border-color:var(--accent)}
 .manual-session button{width:100%;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:9px;font-family:inherit;font-size:.9rem;font-weight:700;cursor:pointer}
 
-/* 카드 */
 .card{width:100%;max-width:480px;background:var(--card);border-radius:18px;padding:22px 20px;box-shadow:0 4px 18px rgba(0,0,0,.07)}
 .card-title{font-size:.95rem;font-weight:700;margin-bottom:18px;display:flex;align-items:center;gap:7px}
 
 .field{margin-bottom:14px}
 label{display:block;font-size:.78rem;font-weight:600;color:var(--muted);margin-bottom:5px;letter-spacing:.03em}
-input,textarea,select{width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;font-size:.93rem;color:var(--text);background:#f9fbfa;outline:none;transition:border-color .2s;-webkit-appearance:none}
-input:focus,textarea:focus,select:focus{border-color:var(--accent);background:#fff}
+input,textarea{width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;font-size:.93rem;color:var(--text);background:#f9fbfa;outline:none;transition:border-color .2s;-webkit-appearance:none}
+input:focus,textarea:focus{border-color:var(--accent);background:#fff}
 textarea{resize:none;height:120px;line-height:1.55}
 .char-count{text-align:right;font-size:.7rem;color:var(--muted);margin-top:3px}
 
@@ -92,40 +80,28 @@ textarea{resize:none;height:120px;line-height:1.55}
 <body>
 <div class="page">
 
-  <!-- 세션 배지 (QR로 들어온 경우 표시) -->
   <div class="session-badge" id="sessionBadge" style="display:none">
     <span>🔑 세션</span>
     <span class="session-code" id="sessionCodeDisplay"></span>
   </div>
 
-  <!-- 수업 주제 -->
   <div class="topic-banner">
     <div class="topic-label">📌 오늘의 주제</div>
     <div class="topic-text" id="topicText">수업 주제를 불러오는 중...</div>
   </div>
 
-  <!-- 세션 직접 입력 (QR 없이 접속 시) -->
   <div class="manual-session" id="manualSession" style="display:none">
     <h3>🔑 세션 코드 입력</h3>
     <input type="text" id="manualCodeInput" placeholder="선생님이 알려준 코드를 입력하세요" maxlength="12">
     <button onclick="enterManualSession()">입장하기</button>
   </div>
 
-  <!-- 의견 입력 폼 -->
   <div class="card" id="formCard" style="display:none">
     <div class="card-title">✏️ 내 의견 남기기</div>
 
     <div class="field">
       <label>학반 *</label>
-      <select id="classname">
-        <option value="">-- 선택하세요 --</option>
-        <option>1학년 1반</option><option>1학년 2반</option><option>1학년 3반</option>
-        <option>1학년 4반</option><option>1학년 5반</option>
-        <option>2학년 1반</option><option>2학년 2반</option><option>2학년 3반</option>
-        <option>2학년 4반</option><option>2학년 5반</option>
-        <option>3학년 1반</option><option>3학년 2반</option><option>3학년 3반</option>
-        <option>3학년 4반</option><option>3학년 5반</option>
-      </select>
+      <input type="text" id="classname" placeholder="예: 2학년 3반" maxlength="20">
     </div>
 
     <div class="field">
@@ -144,7 +120,6 @@ textarea{resize:none;height:120px;line-height:1.55}
     </button>
   </div>
 
-  <!-- 완료 화면 -->
   <div class="success-card" id="successCard">
     <div class="success-icon">🎉</div>
     <div class="success-title">의견이 올라갔어요!</div>
@@ -156,27 +131,20 @@ textarea{resize:none;height:120px;line-height:1.55}
 <div class="toast" id="toast"></div>
 
 <script>
-// ── URL에서 세션 코드 파싱 ──
 const urlParams = new URLSearchParams(location.search);
 let sessionCode = (urlParams.get('session') || '').toUpperCase().trim();
-
 const TITLE_KEY = 'classroom_title_v1';
 
 function init() {
-  // 수업 주제 불러오기 (localStorage 폴백)
   const saved = localStorage.getItem(TITLE_KEY);
   if (saved) document.getElementById('topicText').textContent = saved;
 
   if (sessionCode) {
-    // QR로 세션 코드와 함께 접속
     document.getElementById('sessionBadge').style.display = 'flex';
     document.getElementById('sessionCodeDisplay').textContent = sessionCode;
     document.getElementById('formCard').style.display = 'block';
-    document.getElementById('manualSession').style.display = 'none';
   } else {
-    // 세션 코드 없이 직접 접속 → 수동 입력 화면
     document.getElementById('manualSession').style.display = 'block';
-    document.getElementById('formCard').style.display = 'none';
     document.getElementById('topicText').textContent = '선생님이 알려준 세션 코드를 입력하세요';
   }
 }
@@ -201,7 +169,7 @@ async function submitPost() {
   const name      = document.getElementById('name').value.trim();
   const content   = document.getElementById('content').value.trim();
 
-  if (!classname) { showToast('학반을 선택해주세요'); return; }
+  if (!classname) { showToast('학반을 입력해주세요'); return; }
   if (!name)      { showToast('이름을 입력해주세요'); return; }
   if (!content)   { showToast('의견을 입력해주세요'); return; }
   if (!sessionCode){ showToast('세션 코드가 없어요. 다시 QR을 스캔해주세요'); return; }
