@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>교사용 실시간 게시판</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, onSnapshot, deleteDoc, doc, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAAaVlgZsdQG-3dTR5s60PyIblAHEFQVHk",
+  authDomain: "tell-me-82caa.firebaseapp.com",
+  projectId: "tell-me-82caa",
+  storageBucket: "tell-me-82caa.firebasestorage.app",
+  messagingSenderId: "306688675540",
+  appId: "1:306688675540:web:616b71b69581631aa07541"
+};
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+window._db = db;
+window._deleteDoc = deleteDoc;
+window._doc = doc;
+window._getDocs = getDocs;
+window._collection = collection;
+
+let unsubscribe = null;
+window._listenSession = function(sessionCode) {
+  if (unsubscribe) unsubscribe();
+  const q = query(collection(db, "posts"), where("sessionCode", "==", sessionCode));
+  unsubscribe = onSnapshot(q, (snapshot) => {
+    const posts = [];
+    snapshot.forEach(d => posts.push({ id: d.id, ...d.data() }));
+    posts.sort((a,b) => (a.createdAt?.seconds||0) - (b.createdAt?.seconds||0));
+    window._renderBoard(posts);
+  });
+};
+</script>
+
+<style>
+:root {
+  --bg:#f4f0e8; --panel:#fffdf7; --accent:#3d6b4f; --accent2:#e8734a;
+  --text:#2a2a2a; --muted:#888; --border:#ddd8cc; --shadow:rgba(0,0,0,0.09);
+  --ai:#4a3f8f;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+header{background:var(--accent);color:#fff;padding:12px 22px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.header-left{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+#boardTitle{font-size:1.2rem;font-weight:700;background:transparent;border:none;color:#fff;width:100%;outline:none;border-bottom:2px dashed rgba(255,255,255,0.35);padding-bottom:2px;cursor:text;transition:border-color .2s}
+#boardTitle:focus{border-bottom-color:#fff}
+.edit-hint{font-size:.68rem;opacity:.6}
+.header-right{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:8px;border:none;font-family:inherit;font-size:.79rem;font-weight:600;cursor:pointer;transition:.18s;white-space:nowrap}
+.btn-light{background:rgba(255,255,255,.18);color:#fff}.btn-light:hover{background:rgba(255,255,255,.28)}
+.btn-danger{background:#c0392b;color:#fff}.btn-danger:hover{background:#a93226}
+.btn-ai{background:#4a3f8f;color:#fff;font-size:.82rem;padding:8px 16px}.btn-ai:hover{background:#3a3070}
+
+.session-bar{background:#2c5440;color:#fff;padding:8px 22px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:.81rem}
+.code-badge{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:7px;padding:3px 13px;font-size:1.25rem;font-weight:700;letter-spacing:.15em;font-family:monospace}
+.code-badge.empty{font-size:.82rem;letter-spacing:0;opacity:.6}
+
+.session-panel{background:var(--panel);border-bottom:1px solid var(--border);padding:14px 22px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.session-panel input{padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:.88rem;outline:none;width:170px;transition:border-color .2s}
+.session-panel input:focus{border-color:var(--accent)}
+.btn-start{background:var(--accent);color:#fff;padding:8px 16px;border-radius:8px;border:none;font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer}
+.btn-start:hover{filter:brightness(1.1)}
+.btn-rand{background:transparent;color:var(--muted);border:1px solid var(--border);padding:7px 13px;border-radius:8px;font-family:inherit;font-size:.79rem;cursor:pointer}
+.btn-rand:hover{background:#f0f0f0}
+
+.stats-bar{background:var(--panel);border-bottom:1px solid var(--border);padding:8px 22px;display:flex;gap:16px;align-items:center;font-size:.79rem;color:var(--muted);flex-wrap:wrap}
+.stat-num{font-weight:700;color:var(--accent);font-size:.92rem}
+.live-dot{width:7px;height:7px;border-radius:50%;background:#27ae60;animation:pulse 1.5s infinite;display:inline-block}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.4)}}
+
+.board-wrap{padding:20px 22px;min-height:calc(100vh - 200px)}
+.class-section{margin-bottom:24px}
+.class-label{font-size:.73rem;font-weight:700;letter-spacing:.07em;color:var(--muted);margin-bottom:8px;display:flex;align-items:center;gap:7px}
+.class-label::after{content:'';flex:1;height:1px;background:var(--border)}
+.postits-grid{display:flex;flex-wrap:wrap;gap:12px}
+
+.postit{width:170px;min-height:150px;padding:11px 11px 8px;border-radius:3px 12px 12px 3px;position:relative;display:flex;flex-direction:column;box-shadow:3px 4px 12px var(--shadow),0 1px 3px rgba(0,0,0,.07);animation:popin .35s cubic-bezier(.23,1.5,.5,1) both;transition:transform .18s,box-shadow .18s;border-left:5px solid rgba(0,0,0,.12)}
+.postit:hover{transform:translateY(-4px) rotate(-0.5deg);box-shadow:5px 10px 22px rgba(0,0,0,.13);z-index:2}
+@keyframes popin{from{opacity:0;transform:scale(.7) translateY(16px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.postit.c0{background:#fff9c4;border-left-color:#f9a825}.postit.c1{background:#b3e5fc;border-left-color:#0288d1}
+.postit.c2{background:#c8e6c9;border-left-color:#388e3c}.postit.c3{background:#f8bbd0;border-left-color:#c2185b}
+.postit.c4{background:#e1bee7;border-left-color:#7b1fa2}.postit.c5{background:#ffe0b2;border-left-color:#e65100}
+.postit.c6{background:#b2dfdb;border-left-color:#00695c}.postit.c7{background:#f0f4c3;border-left-color:#827717}
+.postit-meta{font-size:.68rem;font-weight:700;color:rgba(0,0,0,.48);margin-bottom:6px}
+.postit-name{font-size:.83rem;font-weight:700;color:rgba(0,0,0,.73);margin-bottom:5px}
+.postit-content{flex:1;font-size:.79rem;line-height:1.55;color:rgba(0,0,0,.7);word-break:break-all}
+.postit-time{font-size:.63rem;color:rgba(0,0,0,.32);margin-top:6px;text-align:right}
+.postit-del{position:absolute;top:5px;right:6px;background:none;border:none;cursor:pointer;font-size:.76rem;color:rgba(0,0,0,.22);transition:color .15s;padding:0;display:none}
+.postit:hover .postit-del{display:block}
+.postit-del:hover{color:#c0392b}
+.empty-state{text-align:center;padding:50px 20px;color:var(--muted)}
+.empty-state .icon{font-size:2.5rem;margin-bottom:10px}
+
+/* ── 공통 모달 ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.52);z-index:100;align-items:center;justify-content:center;padding:16px}
+.modal-overlay.open{display:flex}
+@keyframes slideup{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:translateY(0)}}
+
+.qr-modal-box{background:#fff;border-radius:18px;padding:26px 30px;max-width:340px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.3);animation:slideup .3s ease}
+.qr-modal-box h2{font-size:1.05rem;margin-bottom:5px;color:var(--accent)}
+.qr-modal-box p{font-size:.8rem;color:var(--muted);margin-bottom:14px}
+#qrcode{display:flex;justify-content:center;margin-bottom:12px}
+.qr-url{font-size:.68rem;color:var(--muted);word-break:break-all;background:#f5f5f5;border-radius:8px;padding:7px 9px;margin-bottom:14px}
+.modal-close{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 22px;font-family:inherit;font-size:.82rem;font-weight:600;cursor:pointer}
+.modal-close:hover{filter:brightness(1.1)}
+
+/* ── 내보내기 모달 ── */
+.export-modal-box{background:#fff;border-radius:18px;padding:22px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3);animation:slideup .3s ease}
+.export-modal-box h2{font-size:.95rem;margin-bottom:14px}
+.export-options{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+.export-btn-row{display:flex;align-items:center;gap:10px;padding:11px 13px;border:1px solid var(--border);border-radius:10px;cursor:pointer;transition:background .15s;background:#fafafa}
+.export-btn-row:hover{background:#f0f0f0}
+.export-btn-row .eicon{font-size:1.4rem;flex-shrink:0}
+.export-btn-row .elabel{font-size:.83rem;font-weight:600}
+.export-btn-row .edesc{font-size:.7rem;color:var(--muted)}
+.export-divider{font-size:.72rem;font-weight:700;color:var(--muted);letter-spacing:.06em;padding:4px 2px 2px}
+
+/* ── AI 분석 모달 ── */
+.ai-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
+.ai-modal-overlay.open{display:flex}
+.ai-modal-box{background:#fff;border-radius:20px;width:100%;max-width:780px;box-shadow:0 24px 80px rgba(0,0,0,.35);animation:slideup .35s ease;margin:auto;overflow:hidden}
+.ai-modal-header{background:linear-gradient(135deg,#4a3f8f,#6c5fc7);color:#fff;padding:18px 24px;display:flex;align-items:center;justify-content:space-between}
+.ai-modal-header h2{font-size:1.1rem;font-weight:700;display:flex;align-items:center;gap:8px}
+.ai-modal-header-right{display:flex;gap:8px;align-items:center}
+.ai-modal-close{background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:8px;padding:7px 14px;font-family:inherit;font-size:.8rem;font-weight:600;cursor:pointer;transition:.18s}
+.ai-modal-close:hover{background:rgba(255,255,255,.32)}
+.ai-save-img-btn{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:8px;padding:7px 13px;font-family:inherit;font-size:.78rem;font-weight:600;cursor:pointer;transition:.18s;display:none}
+.ai-save-img-btn:hover{background:rgba(255,255,255,.28)}
+.ai-save-img-btn.visible{display:inline-flex;align-items:center;gap:5px}
+
+.ai-modal-body{padding:24px;display:flex;flex-direction:column;gap:16px}
+.ai-run-area{text-align:center;padding:10px 0 4px}
+.ai-run-btn{background:#4a3f8f;color:#fff;border:none;border-radius:12px;padding:13px 36px;font-family:inherit;font-size:.95rem;font-weight:700;cursor:pointer;transition:.18s;display:inline-flex;align-items:center;gap:8px}
+.ai-run-btn:hover{background:#3a3070;transform:translateY(-1px);box-shadow:0 4px 16px rgba(74,63,143,.4)}
+.ai-run-btn:disabled{background:#aaa;cursor:default;transform:none;box-shadow:none}
+
+.ai-loading{display:none;flex-direction:column;align-items:center;gap:14px;padding:40px 20px;text-align:center}
+.ai-loading.show{display:flex}
+.spinner{width:36px;height:36px;border:3px solid #e0e0e0;border-top-color:#4a3f8f;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ai-loading p{font-size:.85rem;color:var(--muted);line-height:1.7}
+
+.ai-sections{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:600px){.ai-sections{grid-template-columns:1fr}}
+.ai-section{background:#fafafa;border:1px solid var(--border);border-radius:14px;padding:16px}
+.ai-section.full{grid-column:1/-1}
+.ai-section.insight{background:#f3f0ff;border-color:#c8bfee}
+.ai-section h3{font-size:.82rem;font-weight:700;color:var(--text);margin-bottom:10px;display:flex;align-items:center;gap:5px}
+.ai-section p{font-size:.81rem;line-height:1.7;color:#444}
+
+.sentiment-bars{display:flex;flex-direction:column;gap:8px}
+.sentiment-row{display:flex;align-items:center;gap:8px;font-size:.78rem}
+.sentiment-label{width:34px;font-weight:700}
+.sentiment-bar-wrap{flex:1;background:#ebebeb;border-radius:4px;height:20px;overflow:hidden}
+.sentiment-bar{height:100%;border-radius:4px;transition:width .7s ease;display:flex;align-items:center;padding-left:8px;font-size:.7rem;font-weight:700;color:#fff}
+.bar-pos{background:#27ae60}.bar-neu{background:#f39c12}.bar-neg{background:#e74c3c}
+.sentiment-count{width:30px;text-align:right;font-weight:600;color:var(--muted);font-size:.8rem}
+
+.keyword-bars{display:flex;flex-direction:column;gap:6px}
+.kw-row{display:flex;align-items:center;gap:7px;font-size:.77rem}
+.kw-word{width:70px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kw-bar-wrap{flex:1;background:#ebebeb;border-radius:3px;height:14px;overflow:hidden}
+.kw-bar{height:100%;background:linear-gradient(90deg,#4a3f8f,#8b7ed8);border-radius:3px;transition:width .6s ease}
+.kw-count{width:22px;text-align:right;color:var(--muted);font-size:.72rem}
+
+.topic-tags{display:flex;flex-wrap:wrap;gap:6px}
+.topic-tag{background:#eeeeff;border:1px solid #c0b8f0;border-radius:20px;padding:4px 12px;font-size:.76rem;color:#4a3f8f;font-weight:600}
+.ai-timestamp{text-align:center;font-size:.69rem;color:var(--muted);margin-top:4px}
+.ai-empty{text-align:center;padding:40px 20px;color:var(--muted)}
+.ai-empty .icon{font-size:2.4rem;margin-bottom:10px}
+.ai-empty p{font-size:.82rem;line-height:1.7}
+
+/* 이미지 저장 중 스피너 토스트 */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:11px 22px;border-radius:50px;font-size:.83rem;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;z-index:999}
+.toast.show{opacity:1}
+
+@media print{header,.session-bar,.session-panel,.stats-bar,.postit-del,.ai-modal-overlay{display:none!important}body{background:#fff}.board-wrap{padding:10px}.postit{break-inside:avoid}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <input id="boardTitle" type="text" value="오늘의 수업 주제를 입력하세요" maxlength="80">
+    <span class="edit-hint">✏️ 클릭하면 제목 수정 가능</span>
+  </div>
+  <div class="header-right">
+    <button class="btn btn-ai" onclick="openAI()">🤖 AI 분석</button>
+    <button class="btn btn-light" onclick="openQR()">📱 QR 코드</button>
+    <button class="btn btn-light" onclick="openExport()">📥 다운로드</button>
+    <button class="btn btn-danger" onclick="clearAll()">🗑 전체 삭제</button>
+  </div>
+</header>
+
+<div class="session-bar">
+  <span>🔑 세션 코드:</span>
+  <span class="code-badge empty" id="codeDisplay">없음 — 아래에서 시작</span>
+  <span id="sessionStatus" style="opacity:.65;font-size:.73rem"></span>
+</div>
+
+<div class="session-panel" id="sessionPanel">
+  <span style="font-size:.83rem;font-weight:600">세션 시작:</span>
+  <input type="text" id="codeInput" placeholder="예: A3  /  1반  /  수학" maxlength="12"
+    onkeydown="if(event.key==='Enter')startSession()">
+  <button class="btn-start" onclick="startSession()">▶ 시작</button>
+  <button class="btn-rand" onclick="randomCode()">🎲 랜덤 코드</button>
+  <span style="font-size:.73rem;color:var(--muted)">학급마다 다른 코드 → 의견이 섞이지 않아요</span>
+</div>
+
+<div class="stats-bar">
+  <div style="display:flex;align-items:center;gap:5px"><span class="live-dot"></span>실시간</div>
+  <div>의견 <span class="stat-num" id="totalCount">0</span>개</div>
+  <div>학반 <span class="stat-num" id="classCount">0</span>개</div>
+  <div style="margin-left:auto;font-size:.72rem">
+    <a id="studentLink" href="student_board.html" target="_blank"
+       style="color:var(--accent);text-decoration:none;font-weight:600">👩‍🎓 학생용 페이지 →</a>
+  </div>
+</div>
+
+<div class="board-wrap" id="boardWrap">
+  <div class="empty-state">
+    <div class="icon">📋</div>
+    <p>위에서 세션 코드를 입력하고<br>시작 버튼을 눌러주세요!</p>
+  </div>
+</div>
+
+
+<!-- ════ QR 모달 ════ -->
+<div class="modal-overlay" id="qrModal">
+  <div class="qr-modal-box">
+    <h2>📱 학생용 QR 코드</h2>
+    <p id="qrDesc">스마트폰·태블릿으로 스캔하면 바로 접속해요</p>
+    <div id="qrcode"></div>
+    <div class="qr-url" id="qrUrl"></div>
+    <div style="display:flex;gap:7px;justify-content:center">
+      <button class="modal-close" onclick="window.print()">🖨 인쇄</button>
+      <button class="modal-close" style="background:#888" onclick="closeQR()">닫기</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════ 내보내기 모달 ════ -->
+<div class="modal-overlay" id="exportModal">
+  <div class="export-modal-box">
+    <h2>📥 자료 다운로드</h2>
+    <div class="export-options">
+
+      <div class="export-divider">📋 데이터 파일</div>
+      <div class="export-btn-row" onclick="exportCSV()">
+        <span class="eicon">📊</span>
+        <div><div class="elabel">엑셀/CSV 파일</div><div class="edesc">구글시트·엑셀에서 열 수 있어요</div></div>
+      </div>
+      <div class="export-btn-row" onclick="exportTxt()">
+        <span class="eicon">📄</span>
+        <div><div class="elabel">텍스트 파일</div><div class="edesc">메모장에서 열 수 있어요</div></div>
+      </div>
+
+      <div class="export-divider" style="margin-top:6px">🖼 이미지 저장</div>
+      <div class="export-btn-row" onclick="saveBoardImage()">
+        <span class="eicon">📌</span>
+        <div><div class="elabel">포스트잇 게시판 → 이미지</div><div class="edesc">학생 의견 화면을 PNG로 저장해요</div></div>
+      </div>
+      <div class="export-btn-row" onclick="saveAnalysisImageFromExport()">
+        <span class="eicon">🤖</span>
+        <div><div class="elabel">AI 분석 결과 → 이미지</div><div class="edesc">분석 창을 PNG로 저장해요 (분석 먼저 실행하세요)</div></div>
+      </div>
+
+      <div class="export-divider" style="margin-top:6px">🖨 인쇄</div>
+      <div class="export-btn-row" onclick="window.print();closeExport()">
+        <span class="eicon">📸</span>
+        <div><div class="elabel">화면 인쇄 / 캡처</div><div class="edesc">포스트잇 화면 그대로 출력</div></div>
+      </div>
+
+    </div>
+    <button style="width:100%;background:#888;border-radius:8px;padding:8px;font-family:inherit;font-size:.83rem;font-weight:600;color:#fff;border:none;cursor:pointer" onclick="closeExport()">닫기</button>
+  </div>
+</div>
+
+
+<!-- ════ AI 분석 모달 ════ -->
+<div class="ai-modal-overlay" id="aiModal">
+  <div class="ai-modal-box" id="aiModalBox">
+
+    <div class="ai-modal-header">
+      <h2>🤖 AI 의견 분석</h2>
+      <div class="ai-modal-header-right">
+        <button class="ai-save-img-btn" id="aiSaveImgBtn" onclick="saveAnalysisImage()">
+          🖼 이미지로 저장
+        </button>
+        <button class="ai-modal-close" onclick="closeAI()">✕ 닫기</button>
+      </div>
+    </div>
+
+    <div class="ai-modal-body">
+      <div class="ai-run-area">
+        <button class="ai-run-btn" id="aiRunBtn" onclick="runAnalysis()">✨ 지금 분석 시작</button>
+        <div style="margin-top:8px;font-size:.74rem;color:var(--muted)" id="aiPostCount"></div>
+      </div>
+
+      <div class="ai-loading" id="aiLoading">
+        <div class="spinner"></div>
+        <p>AI가 학생 의견을 분석하는 중이에요...<br>잠시만 기다려 주세요 ☕</p>
+      </div>
+
+      <div class="ai-empty" id="aiEmpty">
+        <div class="icon">💡</div>
+        <p>위 버튼을 누르면<br><strong>요약 · 주제 분류 · 감정 분석 · 키워드</strong>를<br>한 번에 분석해 드려요</p>
+      </div>
+
+      <div id="aiResult" style="display:none"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- 토스트 -->
+<div class="toast" id="toast"></div>
+
+
+<script>
+const COLORS    = ['c0','c1','c2','c3','c4','c5','c6','c7'];
+const TITLE_KEY = 'classroom_title_v1';
+let _allPosts    = [];
+let _currentCode = '';
+let _analysisReady = false;
+
+/* ── 제목 ── */
+const titleEl = document.getElementById('boardTitle');
+if (localStorage.getItem(TITLE_KEY)) titleEl.value = localStorage.getItem(TITLE_KEY);
+titleEl.addEventListener('input', () => localStorage.setItem(TITLE_KEY, titleEl.value));
+
+/* ══ 세션 ══ */
+function randomCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random()*chars.length)];
+  document.getElementById('codeInput').value = code;
+}
+function startSession() {
+  const code = document.getElementById('codeInput').value.trim().toUpperCase();
+  if (!code) { alert('세션 코드를 입력해주세요'); return; }
+  _currentCode = code;
+  const badge = document.getElementById('codeDisplay');
+  badge.textContent = code;
+  badge.className = 'code-badge';
+  document.getElementById('sessionStatus').textContent = '— 이 코드로 접속한 학생 의견만 표시돼요';
+  document.getElementById('sessionPanel').style.display = 'none';
+  document.getElementById('studentLink').href = getStudentUrl(code);
+  window._listenSession(code);
+}
+function getStudentUrl(code) {
+  return location.href.replace('teacher_board.html','student_board.html')
+    + '?session=' + encodeURIComponent(code);
+}
+
+/* ══ 포스트잇 렌더링 ══ */
+window._renderBoard = function(posts) {
+  _allPosts = posts;
+  const wrap = document.getElementById('boardWrap');
+  document.getElementById('totalCount').textContent = posts.length;
+  const classes = [...new Set(posts.map(p=>p.classname).filter(Boolean))];
+  document.getElementById('classCount').textContent = classes.length;
+
+  if (posts.length === 0) {
+    wrap.innerHTML = '<div class="empty-state"><div class="icon">📝</div><p>아직 의견이 없어요.<br>학생들에게 QR 코드를 보여주세요!</p></div>';
+    return;
+  }
+  const byClass = {};
+  posts.forEach(p => {
+    const key = p.classname || '학반 미기재';
+    if (!byClass[key]) byClass[key] = [];
+    byClass[key].push(p);
+  });
+  const existingIds = new Set([...wrap.querySelectorAll('.postit')].map(el=>el.dataset.id));
+  wrap.innerHTML = '';
+  Object.keys(byClass).sort().forEach(cls => {
+    const section = document.createElement('div');
+    section.className = 'class-section';
+    const lbl = document.createElement('div');
+    lbl.className = 'class-label';
+    lbl.textContent = cls + ' (' + byClass[cls].length + '명)';
+    section.appendChild(lbl);
+    const grid = document.createElement('div');
+    grid.className = 'postits-grid';
+    byClass[cls].forEach(p => {
+      const colorIdx = Math.abs(hashStr(p.name||'')) % COLORS.length;
+      const card = document.createElement('div');
+      card.className = 'postit ' + COLORS[colorIdx];
+      card.dataset.id = p.id;
+      if (!existingIds.has(p.id)) card.style.animationName = 'popin';
+      const timeStr = p.createdAt
+        ? new Date(p.createdAt.seconds*1000).toLocaleString('ko-KR',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})
+        : (p.time||'');
+      card.innerHTML = `
+        <button class="postit-del" onclick="deletePost('${p.id}')" title="삭제">✕</button>
+        <div class="postit-meta">${escHtml(p.classname||'')}</div>
+        <div class="postit-name">✏️ ${escHtml(p.name||'이름없음')}</div>
+        <div class="postit-content">${escHtml(p.content||'')}</div>
+        <div class="postit-time">${timeStr}</div>
+      `;
+      grid.appendChild(card);
+    });
+    section.appendChild(grid);
+    wrap.appendChild(section);
+  });
+};
+
+/* ══ AI 분석 모달 ══ */
+function openAI() {
+  document.getElementById('aiModal').classList.add('open');
+  document.getElementById('aiPostCount').textContent =
+    _allPosts.length > 0
+      ? `현재 ${_allPosts.length}개의 의견이 있어요`
+      : '아직 의견이 없어요. 학생 의견이 올라온 후 분석해주세요';
+}
+function closeAI() { document.getElementById('aiModal').classList.remove('open'); }
+
+async function runAnalysis() {
+  if (_allPosts.length === 0) {
+    alert('분석할 의견이 없어요!\n학생 의견이 올라온 후 실행해주세요 😊');
+    return;
+  }
+  const runBtn  = document.getElementById('aiRunBtn');
+  const loading = document.getElementById('aiLoading');
+  const empty   = document.getElementById('aiEmpty');
+  const result  = document.getElementById('aiResult');
+  const saveBtn = document.getElementById('aiSaveImgBtn');
+
+  runBtn.disabled = true;
+  runBtn.textContent = '분석 중...';
+  loading.classList.add('show');
+  empty.style.display = 'none';
+  result.style.display = 'none';
+  saveBtn.classList.remove('visible');
+  _analysisReady = false;
+
+  const title    = titleEl.value;
+  const opinions = _allPosts.map((p,i)=>`[${i+1}] (${p.classname||''} ${p.name||''}) ${p.content||''}`).join('\n');
+  const prompt = `다음은 "${title}" 주제에 대한 학생 의견입니다.\n\n${opinions}\n\n반드시 JSON만 출력하세요. 다른 텍스트 없이 순수 JSON만.\n\n{"summary":"3~4문장 요약","topics":["주제1","주제2","주제3"],"sentiment":{"positive":긍정수,"neutral":중립수,"negative":부정수,"analysis":"한 줄 설명"},"keywords":[{"word":"단어","count":빈도수}],"insight":"교사용 인사이트 2~3문장"}\n\nkeywords는 가장 중요한 8개만.`;
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({
+        model:"claude-sonnet-4-20250514",
+        max_tokens:1000,
+        messages:[{role:"user",content:prompt}]
+      })
+    });
+    const data   = await response.json();
+    const text   = data.content?.map(c=>c.text||'').join('') || '';
+    const clean  = text.replace(/```json|```/g,'').trim();
+    const parsed = JSON.parse(clean);
+    renderResult(parsed);
+    _analysisReady = true;
+    saveBtn.classList.add('visible');
+  } catch(e) {
+    result.style.display = 'block';
+    result.innerHTML = `<div style="text-align:center;padding:20px;color:#c0392b;font-size:.82rem">⚠️ 분석 오류. 잠시 후 다시 시도해주세요.<br><small style="color:var(--muted)">${escHtml(String(e))}</small></div>`;
+  } finally {
+    loading.classList.remove('show');
+    runBtn.disabled = false;
+    runBtn.innerHTML = '✨ 다시 분석하기';
+  }
+}
+
+function renderResult(d) {
+  const result = document.getElementById('aiResult');
+  const total  = (d.sentiment.positive||0)+(d.sentiment.neutral||0)+(d.sentiment.negative||0);
+  const pct    = v => total>0 ? Math.round(v/total*100) : 0;
+  const maxKw  = d.keywords?.length>0 ? Math.max(...d.keywords.map(k=>k.count)) : 1;
+  result.style.display = 'block';
+  result.innerHTML = `
+    <div class="ai-sections">
+      <div class="ai-section full">
+        <h3>📋 전체 요약</h3>
+        <p>${escHtml(d.summary||'')}</p>
+      </div>
+      <div class="ai-section">
+        <h3>🏷 주요 주제</h3>
+        <div class="topic-tags">
+          ${(d.topics||[]).map(t=>`<span class="topic-tag">${escHtml(t)}</span>`).join('')}
+        </div>
+      </div>
+      <div class="ai-section">
+        <h3>💬 감정 분석 <span style="font-weight:400;color:var(--muted);font-size:.72rem">총 ${total}개</span></h3>
+        <div class="sentiment-bars">
+          <div class="sentiment-row">
+            <span class="sentiment-label" style="color:#27ae60">긍정</span>
+            <div class="sentiment-bar-wrap"><div class="sentiment-bar bar-pos" style="width:${pct(d.sentiment.positive)}%">${pct(d.sentiment.positive)>12?pct(d.sentiment.positive)+'%':''}</div></div>
+            <span class="sentiment-count">${d.sentiment.positive||0}</span>
+          </div>
+          <div class="sentiment-row">
+            <span class="sentiment-label" style="color:#f39c12">중립</span>
+            <div class="sentiment-bar-wrap"><div class="sentiment-bar bar-neu" style="width:${pct(d.sentiment.neutral)}%">${pct(d.sentiment.neutral)>12?pct(d.sentiment.neutral)+'%':''}</div></div>
+            <span class="sentiment-count">${d.sentiment.neutral||0}</span>
+          </div>
+          <div class="sentiment-row">
+            <span class="sentiment-label" style="color:#e74c3c">부정</span>
+            <div class="sentiment-bar-wrap"><div class="sentiment-bar bar-neg" style="width:${pct(d.sentiment.negative)}%">${pct(d.sentiment.negative)>12?pct(d.sentiment.negative)+'%':''}</div></div>
+            <span class="sentiment-count">${d.sentiment.negative||0}</span>
+          </div>
+        </div>
+        <p style="margin-top:9px;font-size:.74rem;color:var(--muted)">${escHtml(d.sentiment.analysis||'')}</p>
+      </div>
+      <div class="ai-section full">
+        <h3>🔑 키워드 빈도</h3>
+        <div class="keyword-bars">
+          ${(d.keywords||[]).map(k=>`
+            <div class="kw-row">
+              <span class="kw-word" title="${escHtml(k.word)}">${escHtml(k.word)}</span>
+              <div class="kw-bar-wrap"><div class="kw-bar" style="width:${Math.round(k.count/maxKw*100)}%"></div></div>
+              <span class="kw-count">${k.count}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      <div class="ai-section full insight">
+        <h3 style="color:var(--ai)">💡 수업 활용 인사이트</h3>
+        <p>${escHtml(d.insight||'')}</p>
+      </div>
+    </div>
+    <div class="ai-timestamp">분석 시각: ${new Date().toLocaleString('ko-KR')}</div>
+  `;
+}
+
+/* ══ 이미지 저장 공통 함수 ══ */
+async function captureToImage(element, filename) {
+  showToast('🖼 이미지 저장 중...');
+  try {
+    const canvas = await html2canvas(element, {
+      scale: 2,                  // 2배 해상도 (선명하게)
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+      onclone: (clonedDoc) => {
+        // 캡처 시 불필요한 버튼 숨기기
+        clonedDoc.querySelectorAll('.postit-del, .ai-modal-close, .ai-save-img-btn, .ai-run-btn, .ai-run-area').forEach(el => {
+          el.style.display = 'none';
+        });
+      }
+    });
+    const link = document.createElement('a');
+    link.download = filename;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    showToast('✅ 이미지가 저장됐어요!');
+  } catch(e) {
+    showToast('⚠️ 저장 실패. 다시 시도해주세요.');
+  }
+}
+
+/* 포스트잇 게시판 → 이미지 */
+async function saveBoardImage() {
+  closeExport();
+  if (_allPosts.length === 0) {
+    alert('저장할 의견이 없어요!');
+    return;
+  }
+  // 캡처용 래퍼 (제목 + 게시판 묶기)
+  const wrapper = document.createElement('div');
+  wrapper.style.cssText = 'background:#f4f0e8;padding:20px;font-family:Noto Sans KR,sans-serif;';
+
+  // 제목 추가
+  const titleDiv = document.createElement('div');
+  titleDiv.style.cssText = 'background:#3d6b4f;color:#fff;padding:14px 20px;border-radius:10px;margin-bottom:16px;font-size:1.1rem;font-weight:700;';
+  titleDiv.textContent = '📋 ' + titleEl.value + '  [세션: ' + _currentCode + ']';
+  wrapper.appendChild(titleDiv);
+
+  // 게시판 복사
+  const boardClone = document.getElementById('boardWrap').cloneNode(true);
+  boardClone.style.cssText = 'padding:0;background:transparent;';
+  wrapper.appendChild(boardClone);
+
+  // 날짜 추가
+  const dateDiv = document.createElement('div');
+  dateDiv.style.cssText = 'text-align:right;font-size:.72rem;color:#888;margin-top:12px;';
+  dateDiv.textContent = '저장: ' + new Date().toLocaleString('ko-KR');
+  wrapper.appendChild(dateDiv);
+
+  // 잠깐 body에 붙였다 캡처
+  wrapper.style.position = 'fixed';
+  wrapper.style.top = '-9999px';
+  wrapper.style.left = '0';
+  wrapper.style.width = '900px';
+  document.body.appendChild(wrapper);
+
+  await captureToImage(wrapper, '포스트잇게시판_' + today() + '.png');
+  document.body.removeChild(wrapper);
+}
+
+/* AI 분석 → 이미지 (모달 내부 캡처) */
+async function saveAnalysisImage() {
+  if (!_analysisReady) {
+    alert('먼저 AI 분석을 실행해주세요!');
+    return;
+  }
+  const target = document.getElementById('aiModalBox');
+  await captureToImage(target, 'AI분석결과_' + today() + '.png');
+}
+
+/* 내보내기 모달에서 AI 분석 이미지 저장 버튼 클릭 시 */
+async function saveAnalysisImageFromExport() {
+  closeExport();
+  if (!_analysisReady) {
+    alert('먼저 🤖 AI 분석을 실행한 후 저장해주세요!');
+    return;
+  }
+  // AI 모달을 잠깐 열고 캡처
+  document.getElementById('aiModal').classList.add('open');
+  await new Promise(r => setTimeout(r, 300)); // 렌더링 대기
+  await saveAnalysisImage();
+  document.getElementById('aiModal').classList.remove('open');
+}
+
+/* ══ 삭제 ══ */
+async function deletePost(id) {
+  if (!confirm('이 의견을 삭제할까요?')) return;
+  await window._deleteDoc(window._doc(window._db,'posts',id));
+}
+async function clearAll() {
+  if (!confirm('모든 의견을 삭제할까요? 되돌릴 수 없어요.')) return;
+  const snap = await window._getDocs(window._collection(window._db,'posts'));
+  snap.forEach(d => window._deleteDoc(d.ref));
+}
+
+/* ══ QR ══ */
+let qrGenerated = false;
+function openQR() {
+  if (!_currentCode) { alert('먼저 세션을 시작해주세요!'); return; }
+  document.getElementById('qrModal').classList.add('open');
+  if (!qrGenerated) {
+    const url = getStudentUrl(_currentCode);
+    document.getElementById('qrUrl').textContent = url;
+    document.getElementById('qrDesc').textContent = `세션 [${_currentCode}] — 스캔하면 바로 접속해요`;
+    new QRCode(document.getElementById('qrcode'),{text:url,width:190,height:190,colorDark:'#3d6b4f',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.H});
+    qrGenerated = true;
+  }
+}
+function closeQR() { document.getElementById('qrModal').classList.remove('open'); }
+
+/* ══ 내보내기 ══ */
+function openExport()  { document.getElementById('exportModal').classList.add('open'); }
+function closeExport() { document.getElementById('exportModal').classList.remove('open'); }
+
+function exportCSV() {
+  const title = titleEl.value;
+  let csv = '\uFEFF"수업주제","세션코드","학반","이름","의견","작성시간"\n';
+  _allPosts.forEach(p => {
+    const t = p.createdAt?new Date(p.createdAt.seconds*1000).toLocaleString('ko-KR'):(p.time||'');
+    csv += `"${title}","${_currentCode}","${p.classname||''}","${p.name||''}","${(p.content||'').replace(/"/g,'""')}","${t}"\n`;
+  });
+  dl(csv,'의견게시판_'+today()+'.csv','text/csv');
+  closeExport();
+}
+function exportTxt() {
+  const title = titleEl.value;
+  let txt = `📋 ${title}  [세션: ${_currentCode}]\n내보내기: ${new Date().toLocaleString('ko-KR')}\n${'─'.repeat(42)}\n\n`;
+  _allPosts.forEach((p,i) => {
+    const t = p.createdAt?new Date(p.createdAt.seconds*1000).toLocaleString('ko-KR'):(p.time||'');
+    txt += `[${i+1}] ${p.classname||''} ${p.name||'이름없음'}\n${p.content||''}\n(${t})\n\n`;
+  });
+  dl(txt,'의견게시판_'+today()+'.txt','text/plain');
+  closeExport();
+}
+function dl(content,filename,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type}));a.download=filename;a.click();}
+function today(){const d=new Date();return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;}
+
+/* ══ 유틸 ══ */
+function hashStr(s){let h=0;for(let i=0;i<s.length;i++)h=(Math.imul(31,h)+s.charCodeAt(i))|0;return h;}
+function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+document.getElementById('qrModal').addEventListener('click',e=>{if(e.target===document.getElementById('qrModal'))closeQR();});
+document.getElementById('exportModal').addEventListener('click',e=>{if(e.target===document.getElementById('exportModal'))closeExport();});
+document.getElementById('aiModal').addEventListener('click',e=>{if(e.target===document.getElementById('aiModal'))closeAI();});
+</script>
+</body>
+</html>
