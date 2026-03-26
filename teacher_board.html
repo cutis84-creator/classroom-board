@@ -447,13 +447,15 @@ keywords는 중요한 8개만.`;
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.3, maxOutputTokens: 1200 }
+        generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
       })
     });
     const data  = await response.json();
     const text  = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const clean = text.replace(/```json|```/g,'').trim();
-    const parsed = JSON.parse(clean);
+    const jsonMatch = clean.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('AI 응답에서 JSON을 찾을 수 없어요. 다시 시도해주세요.');
+    const parsed = JSON.parse(jsonMatch[0]);
     renderResult(parsed);
     _analysisReady = true;
     saveBtn.classList.add('visible');
