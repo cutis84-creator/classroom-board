@@ -309,7 +309,7 @@ header{background:var(--accent);color:#fff;padding:12px 22px;display:flex;align-
 <script>
 const COLORS    = ['c0','c1','c2','c3','c4','c5','c6','c7'];
 const TITLE_KEY = 'classroom_title_v1';
-const GEMINI_KEY = 'AIzaSyBRRFIurHi_akOymP3oJI7DyLEgBMBcP5E';
+const GEMINI_KEY = 'AIzaSyAcvAcG2ACL0gCkUjmiqtQLoMExWMgB4Ms';
 const GEMINI_URL = 'https://blue-pine-d857.cutis84.workers.dev';
 
 let _allPosts      = [];
@@ -447,13 +447,26 @@ keywords는 중요한 8개만.`;
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt })
     });
-    const data  = await response.json();
-    if (data.error) throw new Error('Gemini 오류: ' + data.error);
-    const text  = data.text || '';
+    const raw  = await response.text();
+    // Gemini 원본 응답 또는 Worker {text} 응답 둘 다 처리
+    let text = '';
+    try {
+      const data = JSON.parse(raw);
+      if (data.error) throw new Error('Gemini 오류: ' + (data.error.message || JSON.stringify(data.error)));
+      // Worker가 {text} 형태로 반환하는 경우
+      if (data.text !== undefined) {
+        text = data.text;
+      // Gemini 원본 응답인 경우
+      } else if (data.candidates) {
+        text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      }
+    } catch(parseErr) {
+      text = raw;
+    }
     if (!text) throw new Error('AI 응답이 비어있어요. 다시 시도해주세요.');
     const clean = text.replace(/```json|```/g,'').trim();
     const jsonMatch = clean.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('JSON 파싱 실패: ' + text.slice(0, 120));
+    if (!jsonMatch) throw new Error('JSON 파싱 실패: ' + text.slice(0, 200));
     const parsed = JSON.parse(jsonMatch[0]);
     renderResult(parsed);
     _analysisReady = true;
