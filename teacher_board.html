@@ -445,18 +445,15 @@ keywords는 중요한 8개만.`;
     const response = await fetch(GEMINI_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
-      })
+      body: JSON.stringify({ prompt })
     });
     const data  = await response.json();
-    if (data.error) throw new Error('Gemini 오류: ' + (data.error.message || JSON.stringify(data.error)));
-    const text  = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    if (data.error) throw new Error('Gemini 오류: ' + data.error);
+    const text  = data.text || '';
     if (!text) throw new Error('AI 응답이 비어있어요. 다시 시도해주세요.');
     const clean = text.replace(/```json|```/g,'').trim();
     const jsonMatch = clean.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('JSON 파싱 실패. 원문: ' + text.slice(0, 100));
+    if (!jsonMatch) throw new Error('JSON 파싱 실패: ' + text.slice(0, 120));
     const parsed = JSON.parse(jsonMatch[0]);
     renderResult(parsed);
     _analysisReady = true;
