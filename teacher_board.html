@@ -447,23 +447,15 @@ keywords는 중요한 8개만.`;
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt })
     });
-    const raw  = await response.text();
-    // Gemini 원본 응답 또는 Worker {text} 응답 둘 다 처리
+    const data = await response.json();
+    // Worker가 Gemini 원본 응답을 그대로 전달하는 경우
     let text = '';
-    try {
-      const data = JSON.parse(raw);
-      if (data.error) throw new Error('Gemini 오류: ' + (data.error.message || JSON.stringify(data.error)));
-      // Worker가 {text} 형태로 반환하는 경우
-      if (data.text !== undefined) {
-        text = data.text;
-      // Gemini 원본 응답인 경우
-      } else if (data.candidates) {
-        text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      }
-    } catch(parseErr) {
-      text = raw;
+    if (data.candidates) {
+      text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    } else if (data.text !== undefined) {
+      text = data.text;
     }
-    if (!text) throw new Error('AI 응답이 비어있어요. 다시 시도해주세요.');
+    if (!text) throw new Error('AI 응답이 비어있어요. (candidates: ' + JSON.stringify(data).slice(0,100) + ')');
     const clean = text.replace(/```json|```/g,'').trim();
     const jsonMatch = clean.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('JSON 파싱 실패: ' + text.slice(0, 200));
